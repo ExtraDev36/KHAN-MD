@@ -1,65 +1,54 @@
+const { cmd } = require("../command");
 const axios = require("axios");
 const FormData = require("form-data");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { cmd } = require("../command");
+const { fileTypeFromBuffer } = require("file-type");
+
+const MAX_FILE_SIZE_MB = 200;
+
+async function uploadMedia(buffer) {
+  try {
+    const { ext } = await fileTypeFromBuffer(buffer);
+    const bodyForm = new FormData();
+    bodyForm.append("fileToUpload", buffer, "file." + ext);
+    bodyForm.append("reqtype", "fileupload");
+
+    const res = await axios.post("https://catbox.moe/user/api.php", bodyForm, {
+      headers: bodyForm.getHeaders(),
+    });
+
+    return res.data;
+  } catch (error) {
+    console.error("Error during media upload:", error);
+    throw new Error("Failed to upload media.");
+  }
+}
 
 cmd({
   pattern: "tourl",
-  alias: ["imgtourl", "img2url", "url"],
-  react: "🖇",
-  desc: "Convert an image to a URL using ImgBB.",
-  category: "utility",
-  use: ".tourl (Reply to an image)",
-  filename: __filename
-}, async (conn, m, store, { from, quoted, reply, sender }) => {
+  react: "🌐",
+  desc: "Upload media and get a direct URL.",
+  category: "tools",
+  filename: __filename,
+}, async (conn, m, msg, { from, quoted, reply }) => {
+  if (!quoted || !["imageMessage", "videoMessage", "audioMessage"].includes(quoted.mtype)) {
+    return reply("Send or reply to an image, video, or audio to upload.");
+  }
+
   try {
-    const targetMsg = quoted ? quoted : m;
-    const mimeType = (targetMsg.msg || targetMsg).mimetype || "";
+    reply("⏳ Uploading media, please wait...");
 
-    if (!mimeType || !mimeType.startsWith("image")) {
-      return reply("❌ Please reply to an image.");
+    const media = await quoted.download();
+    if (!media) return reply("❌ Failed to download media.");
+
+    const fileSizeMB = media.length / (1024 * 1024);
+    if (fileSizeMB > MAX_FILE_SIZE_MB) {
+      return reply(`❌ File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB.`);
     }
 
-    reply("🔄 Uploading image...");
-
-    const imageBuffer = await targetMsg.download();
-    const tempFilePath = path.join(os.tmpdir(), "temp_image.jpg");
-    fs.writeFileSync(tempFilePath, imageBuffer);
-
-    const formData = new FormData();
-    formData.append("image", fs.createReadStream(tempFilePath));
-
-    const { data } = await axios.post("https://api.imgbb.com/1/upload?key=e909ac2cc8d50250c08f176afef0e333", formData, {
-      headers: formData.getHeaders(),
-    });
-
-    fs.unlinkSync(tempFilePath); // Delete temp file
-
-    if (!data || !data.data || !data.data.url) {
-      throw "❌ Failed to upload the image.";
-    }
-
-    const imageUrl = data.data.url;
-    const msgContext = {
-      mentionedJid: [sender],
-      forwardingScore: 999,
-      isForwarded: true,
-      forwardedNewsletterMessageInfo: {
-        newsletterJid: "120363354023106228@newsletter",
-        newsletterName: "JawadTechX",
-        serverMessageId: 143
-      }
-    };
-
-    await conn.sendMessage(from, {
-      text: `✅ *Image Uploaded Successfully 📸*\n📏 *Size:* ${imageBuffer.length} Bytes\n🔗 *URL:* ${imageUrl}\n\n> ⚖️ *Uploaded via KHAN-AI*`,
-      contextInfo: msgContext
-    });
-
+    const mediaUrl = await uploadMedia(media);
+    reply(`✅ Here is your media URL:\n${mediaUrl}`);
   } catch (error) {
-    reply("❌ Error: " + error.message);
-    console.error("Upload Error:", error);
+    console.error("Error processing media:", error);
+    reply("❌ Error processing media.");
   }
 });
