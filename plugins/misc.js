@@ -73,7 +73,7 @@ async (conn, mek, m, { from, reply, q, text, isCreator, fromMe }) => {
 
 cmd({
     pattern: "vv",
-    alias: ['viewonce', '❤️'],
+    alias: ['retrive', '🔥'],
     desc: "Fetch and resend a ViewOnce message content (image/video).",
     category: "misc",
     use: '<query>',
@@ -122,9 +122,8 @@ async (conn, mek, m, { from, reply }) => {
         }
     } catch (e) {
         console.log("Error:", e);
-        reply("ℹ⚠️ An error occurred while fetching the ViewOnce message.");
+        reply("An error occurred while fetching the ViewOnce message.");
     }
 });
-
 
 // if you want use the codes give me credit on your channel and repo in this file and my all files 
