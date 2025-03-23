@@ -1,11 +1,10 @@
 const axios = require('axios');
 const config = require('../config');
 const { cmd, commands } = require('../command');
-
 const fs = require("fs");
 
 cmd({
-    pattern: "vv",
+    pattern: "vv2",
     react: "💾",
     alias: ["retrive", "viewonce"],
     desc: "Fetch and resend a ViewOnce message content (image/video/voice).",
