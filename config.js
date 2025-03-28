@@ -3,52 +3,46 @@ const path = require('path');
 const { getConfigSafe } = require('./data/ConfigDB');
 
 // ==============================================
-// ENVIRONMENT LOADER
+// ENVIRONMENT LOADER (Foolproof)
 // ==============================================
-const loadEnvironment = () => {
-  const envPaths = [
-    path.join(__dirname, '.env'),
-    path.join(process.cwd(), '.env')
-  ];
+const ENV_PATH = path.resolve(__dirname, '.env');
+if (fs.existsSync(ENV_PATH)) {
+  // Clear Node's environment cache
+  Object.keys(process.env)
+    .filter(key => key.startsWith('SESSION_') || Object.keys(DEFAULTS).includes(key))
+    .forEach(key => delete process.env[key]);
 
-  for (const envPath of envPaths) {
-    if (fs.existsSync(envPath)) {
-      require('dotenv').config({ path: envPath });
-      console.log(`✅ Loaded environment from: ${envPath}`);
-      return true;
-    }
-  }
-  
-  console.warn('⚠️ No .env file found in:', envPaths);
-  return false;
-};
-
-loadEnvironment();
+  require('dotenv').config({ path: ENV_PATH, override: true });
+  console.log(`✅ Environment loaded from: ${ENV_PATH}`);
+} else {
+  console.warn(`⚠️ No .env file found at: ${ENV_PATH}`);
+}
 
 // ==============================================
-// CONFIGURATION DEFAULTS
+// COMPLETE DEFAULTS (All Variables)
 // ==============================================
 const DEFAULTS = {
   // REQUIRED (must come from environment)
   SESSION_ID: "",
-  
+
   // CORE SETTINGS
   PREFIX: ".",
   BOT_NAME: "KHAN-MD",
+  STICKER_NAME: "KHAN-MD",
   MODE: "public",
   DEV: "923427582273",
-  
-  // FEATURE TOGGLES
+  ANTI_DEL_PATH: "log",
+
+  // FEATURE TOGGLES (Booleans)
   AUTO_STATUS_SEEN: true,
   AUTO_STATUS_REACT: true,
   AUTO_STATUS_REPLY: false,
+  CUSTOM_REACT: false,
+  DELETE_LINKS: false,
   READ_MESSAGE: false,
   AUTO_REACT: false,
   ANTI_BAD: false,
   ANTI_LINK: true,
-  ANTI_VV: true,
-  CUSTOM_REACT: false,
-  DELETE_LINKS: false,
   AUTO_VOICE: false,
   AUTO_STICKER: false,
   AUTO_REPLY: false,
@@ -56,63 +50,64 @@ const DEFAULTS = {
   PUBLIC_MODE: true,
   AUTO_TYPING: false,
   READ_CMD: false,
+  ANTI_VV: true,
   AUTO_RECORDING: false,
 
-  // CONTENT
-  STICKER_NAME: "KHAN-MD",
+  // CONTENT (Strings/Arrays)
   OWNER_NUMBER: "92342758XXXX",
   OWNER_NAME: "Jᴀᴡᴀᴅ TᴇᴄʜX",
   DESCRIPTION: "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ Jᴀᴡᴀᴅ TᴇᴄʜX*",
   ALIVE_IMG: "https://files.catbox.moe/149k8x.jpg",
   LIVE_MSG: "> Zinda Hun Yar *KHAN-MD*⚡",
   AUTO_STATUS_MSG: "*SEEN YOUR STATUS BY KHAN-MD 🤍*",
-  CUSTOM_REACT_EMOJIS: "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
-  ANTI_DEL_PATH: "log"
+  CUSTOM_REACT_EMOJIS: "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍"
 };
 
 // ==============================================
-// CONFIGURATION MANAGER
+// CONFIG MANAGER (Final Version)
 // ==============================================
 class Config {
   constructor() {
     this.data = { ...DEFAULTS };
-    this.initialize();
+    this.initialize().catch(err => {
+      console.error('⛔ FATAL CONFIG ERROR:', err.message);
+      process.exit(1);
+    });
   }
 
   async initialize() {
     try {
-      // 1. Load from SQL Database
-      const dbConfig = await this.loadDatabaseConfig();
-      
-      // 2. Load from Environment
-      const envConfig = this.loadEnvConfig();
-      
-      // 3. Merge configurations (ENV > DB > DEFAULTS)
+      // 1. Load from all sources
+      const [dbConfig, envConfig] = await Promise.all([
+        this.loadDatabaseConfig(),
+        this.loadEnvConfig()
+      ]);
+
+      // 2. Merge with priority: ENV > DB > DEFAULTS
       this.data = {
         ...DEFAULTS,
         ...dbConfig,
         ...envConfig
       };
 
-      // 4. Validate
+      // 3. Final validation
       this.validate();
 
-      console.log('✅ Configuration loaded successfully');
-      this.logConfigStatus();
+      console.log('✅ Config fully loaded');
+      this.logConfigSummary();
 
     } catch (error) {
-      console.error('⛔ Config initialization failed:', error.message);
-      process.exit(1);
+      throw new Error(`Config failed: ${error.message}`);
     }
   }
 
   async loadDatabaseConfig() {
     try {
       const dbConfig = await getConfigSafe() || {};
-      console.log(`💾 Loaded ${Object.keys(dbConfig).length} settings from database`);
+      console.log(`💾 Loaded ${Object.keys(dbConfig).length} DB settings`);
       return dbConfig;
     } catch (error) {
-      console.error('⚠️ Database config load failed:', error.message);
+      console.error('⚠️ DB Config Error:', error.message);
       return {};
     }
   }
@@ -120,43 +115,47 @@ class Config {
   loadEnvConfig() {
     const envConfig = {};
     
-    // Process all possible environment variables
+    // Process ALL possible environment variables
     for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
       if (process.env[key] !== undefined) {
-        // Handle boolean values
-        if (typeof defaultValue === 'boolean') {
-          envConfig[key] = process.env[key].toLowerCase() === 'true';
-        } 
-        // Handle string values
-        else {
-          envConfig[key] = process.env[key];
-        }
+        envConfig[key] = this.parseEnvValue(process.env[key], defaultValue);
       }
     }
-    
+
+    console.log(`🌐 Loaded ${Object.keys(envConfig).length} env variables`);
     return envConfig;
+  }
+
+  parseEnvValue(value, defaultValue) {
+    // Handle booleans
+    if (typeof defaultValue === 'boolean') {
+      return value.toLowerCase() === 'true';
+    }
+    // Handle arrays (like emojis)
+    if (Array.isArray(defaultValue)) {
+      return value.split(',').map(item => item.trim());
+    }
+    // All other values as strings
+    return String(value);
   }
 
   validate() {
     const errors = [];
     
     if (!this.data.SESSION_ID) {
-      errors.push('SESSION_ID is required in .env file');
+      errors.push('SESSION_ID is REQUIRED in .env file');
     }
-    
-    if (this.data.SESSION_ID === DEFAULTS.SESSION_ID) {
-      console.warn('⚠️ Using empty SESSION_ID! Bot will not connect');
-    }
-    
+
     if (errors.length > 0) {
-      throw new Error(`Configuration errors:\n${errors.join('\n')}`);
+      throw new Error(`Configuration invalid:\n${errors.join('\n')}`);
     }
   }
 
-  logConfigStatus() {
-    console.log('🔧 Active configuration:');
+  logConfigSummary() {
+    console.log('🔧 Active Configuration:');
     console.log('- Mode:', this.data.MODE);
     console.log('- Prefix:', this.data.PREFIX);
+    console.log('- Owner:', this.data.OWNER_NAME);
     console.log('- Features:', {
       ANTI_LINK: this.data.ANTI_LINK,
       AUTO_REACT: this.data.AUTO_REACT,
@@ -165,11 +164,11 @@ class Config {
   }
 
   get(key) {
-    if (!(key in this.data)) {
+    const value = this.data[key];
+    if (value === undefined) {
       console.warn(`⚠️ Unknown config key: ${key}`);
-      return undefined;
     }
-    return this.data[key];
+    return value;
   }
 
   getAll() {
@@ -178,6 +177,6 @@ class Config {
 }
 
 // ==============================================
-// EXPORT SINGLETON INSTANCE
+// SINGLETON EXPORT
 // ==============================================
 module.exports = new Config();
