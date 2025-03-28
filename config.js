@@ -1,30 +1,44 @@
 const fs = require('fs');
+const path = require('path');
 const { getConfigSafe } = require('./data/ConfigDB');
 
-// Load environment variables
-if (fs.existsSync('.env')) {
-  require('dotenv').config();
-} else if (fs.existsSync('config.env')) {
-  require('dotenv').config({ path: './config.env' });
-} else {
-  console.warn('⚠️ No .env file found! Using defaults');
-}
+// ==============================================
+// ENVIRONMENT LOADER
+// ==============================================
+const loadEnvironment = () => {
+  const envPaths = [
+    path.join(__dirname, '.env'),
+    path.join(process.cwd(), '.env')
+  ];
 
-// Helper function
-const bool = (val, def = false) => {
-  if (val === undefined) return def;
-  return val === 'true' || val === true;
+  for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+      require('dotenv').config({ path: envPath });
+      console.log(`✅ Loaded environment from: ${envPath}`);
+      return true;
+    }
+  }
+  
+  console.warn('⚠️ No .env file found in:', envPaths);
+  return false;
 };
 
-// Default configuration
-const defaults = {
-  // Core Settings
+loadEnvironment();
+
+// ==============================================
+// CONFIGURATION DEFAULTS
+// ==============================================
+const DEFAULTS = {
+  // REQUIRED (must come from environment)
   SESSION_ID: "",
+  
+  // CORE SETTINGS
   PREFIX: ".",
   BOT_NAME: "KHAN-MD",
   MODE: "public",
+  DEV: "923427582273",
   
-  // Features
+  // FEATURE TOGGLES
   AUTO_STATUS_SEEN: true,
   AUTO_STATUS_REACT: true,
   AUTO_STATUS_REPLY: false,
@@ -44,7 +58,7 @@ const defaults = {
   READ_CMD: false,
   AUTO_RECORDING: false,
 
-  // Content
+  // CONTENT
   STICKER_NAME: "KHAN-MD",
   OWNER_NUMBER: "92342758XXXX",
   OWNER_NAME: "Jᴀᴡᴀᴅ TᴇᴄʜX",
@@ -53,72 +67,108 @@ const defaults = {
   LIVE_MSG: "> Zinda Hun Yar *KHAN-MD*⚡",
   AUTO_STATUS_MSG: "*SEEN YOUR STATUS BY KHAN-MD 🤍*",
   CUSTOM_REACT_EMOJIS: "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
-  ANTI_DEL_PATH: "log",
-  DEV: "923427582273"
+  ANTI_DEL_PATH: "log"
 };
 
+// ==============================================
+// CONFIGURATION MANAGER
+// ==============================================
 class Config {
   constructor() {
-    this.data = { ...defaults };
-    this.load();
+    this.data = { ...DEFAULTS };
+    this.initialize();
   }
 
-  async load() {
+  async initialize() {
     try {
-      // 1. Load from database
-      const dbConfig = await getConfigSafe() || {};
+      // 1. Load from SQL Database
+      const dbConfig = await this.loadDatabaseConfig();
       
-      // 2. Merge with environment variables
+      // 2. Load from Environment
+      const envConfig = this.loadEnvConfig();
+      
+      // 3. Merge configurations (ENV > DB > DEFAULTS)
       this.data = {
-        ...defaults,
+        ...DEFAULTS,
         ...dbConfig,
-        SESSION_ID: process.env.SESSION_ID || "",
-        PREFIX: process.env.PREFIX || defaults.PREFIX,
-        BOT_NAME: process.env.BOT_NAME || defaults.BOT_NAME,
-        MODE: process.env.MODE || defaults.MODE,
-        AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN !== undefined ? bool(process.env.AUTO_STATUS_SEEN) : defaults.AUTO_STATUS_SEEN,
-        AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT !== undefined ? bool(process.env.AUTO_STATUS_REACT) : defaults.AUTO_STATUS_REACT,
-        AUTO_STATUS_REPLY: process.env.AUTO_STATUS_REPLY !== undefined ? bool(process.env.AUTO_STATUS_REPLY) : defaults.AUTO_STATUS_REPLY,
-        READ_MESSAGE: process.env.READ_MESSAGE !== undefined ? bool(process.env.READ_MESSAGE) : defaults.READ_MESSAGE,
-        AUTO_REACT: process.env.AUTO_REACT !== undefined ? bool(process.env.AUTO_REACT) : defaults.AUTO_REACT,
-        ANTI_BAD: process.env.ANTI_BAD !== undefined ? bool(process.env.ANTI_BAD) : defaults.ANTI_BAD,
-        ANTI_LINK: process.env.ANTI_LINK !== undefined ? bool(process.env.ANTI_LINK) : defaults.ANTI_LINK,
-        ANTI_VV: process.env.ANTI_VV !== undefined ? bool(process.env.ANTI_VV) : defaults.ANTI_VV,
-        CUSTOM_REACT: process.env.CUSTOM_REACT !== undefined ? bool(process.env.CUSTOM_REACT) : defaults.CUSTOM_REACT,
-        DELETE_LINKS: process.env.DELETE_LINKS !== undefined ? bool(process.env.DELETE_LINKS) : defaults.DELETE_LINKS,
-        AUTO_VOICE: process.env.AUTO_VOICE !== undefined ? bool(process.env.AUTO_VOICE) : defaults.AUTO_VOICE,
-        AUTO_STICKER: process.env.AUTO_STICKER !== undefined ? bool(process.env.AUTO_STICKER) : defaults.AUTO_STICKER,
-        AUTO_REPLY: process.env.AUTO_REPLY !== undefined ? bool(process.env.AUTO_REPLY) : defaults.AUTO_REPLY,
-        ALWAYS_ONLINE: process.env.ALWAYS_ONLINE !== undefined ? bool(process.env.ALWAYS_ONLINE) : defaults.ALWAYS_ONLINE,
-        PUBLIC_MODE: process.env.PUBLIC_MODE !== undefined ? bool(process.env.PUBLIC_MODE) : defaults.PUBLIC_MODE,
-        AUTO_TYPING: process.env.AUTO_TYPING !== undefined ? bool(process.env.AUTO_TYPING) : defaults.AUTO_TYPING,
-        READ_CMD: process.env.READ_CMD !== undefined ? bool(process.env.READ_CMD) : defaults.READ_CMD,
-        AUTO_RECORDING: process.env.AUTO_RECORDING !== undefined ? bool(process.env.AUTO_RECORDING) : defaults.AUTO_RECORDING,
-        STICKER_NAME: process.env.STICKER_NAME || defaults.STICKER_NAME,
-        OWNER_NUMBER: process.env.OWNER_NUMBER || defaults.OWNER_NUMBER,
-        OWNER_NAME: process.env.OWNER_NAME || defaults.OWNER_NAME,
-        DESCRIPTION: process.env.DESCRIPTION || defaults.DESCRIPTION,
-        ALIVE_IMG: process.env.ALIVE_IMG || defaults.ALIVE_IMG,
-        LIVE_MSG: process.env.LIVE_MSG || defaults.LIVE_MSG,
-        AUTO_STATUS_MSG: process.env.AUTO_STATUS_MSG || defaults.AUTO_STATUS_MSG,
-        CUSTOM_REACT_EMOJIS: process.env.CUSTOM_REACT_EMOJIS || defaults.CUSTOM_REACT_EMOJIS,
-        ANTI_DEL_PATH: process.env.ANTI_DEL_PATH || defaults.ANTI_DEL_PATH,
-        DEV: process.env.DEV || defaults.DEV
+        ...envConfig
       };
 
-      // 3. Validate
-      if (!this.data.SESSION_ID) {
-        throw new Error("❌ SESSION_ID is required in .env file!");
-      }
+      // 4. Validate
+      this.validate();
 
-      console.log('✅ Config loaded successfully');
+      console.log('✅ Configuration loaded successfully');
+      this.logConfigStatus();
+
     } catch (error) {
-      console.error('Config Error:', error.message);
+      console.error('⛔ Config initialization failed:', error.message);
       process.exit(1);
     }
   }
 
+  async loadDatabaseConfig() {
+    try {
+      const dbConfig = await getConfigSafe() || {};
+      console.log(`💾 Loaded ${Object.keys(dbConfig).length} settings from database`);
+      return dbConfig;
+    } catch (error) {
+      console.error('⚠️ Database config load failed:', error.message);
+      return {};
+    }
+  }
+
+  loadEnvConfig() {
+    const envConfig = {};
+    
+    // Process all possible environment variables
+    for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
+      if (process.env[key] !== undefined) {
+        // Handle boolean values
+        if (typeof defaultValue === 'boolean') {
+          envConfig[key] = process.env[key].toLowerCase() === 'true';
+        } 
+        // Handle string values
+        else {
+          envConfig[key] = process.env[key];
+        }
+      }
+    }
+    
+    return envConfig;
+  }
+
+  validate() {
+    const errors = [];
+    
+    if (!this.data.SESSION_ID) {
+      errors.push('SESSION_ID is required in .env file');
+    }
+    
+    if (this.data.SESSION_ID === DEFAULTS.SESSION_ID) {
+      console.warn('⚠️ Using empty SESSION_ID! Bot will not connect');
+    }
+    
+    if (errors.length > 0) {
+      throw new Error(`Configuration errors:\n${errors.join('\n')}`);
+    }
+  }
+
+  logConfigStatus() {
+    console.log('🔧 Active configuration:');
+    console.log('- Mode:', this.data.MODE);
+    console.log('- Prefix:', this.data.PREFIX);
+    console.log('- Features:', {
+      ANTI_LINK: this.data.ANTI_LINK,
+      AUTO_REACT: this.data.AUTO_REACT,
+      ANTI_VV: this.data.ANTI_VV
+    });
+  }
+
   get(key) {
+    if (!(key in this.data)) {
+      console.warn(`⚠️ Unknown config key: ${key}`);
+      return undefined;
+    }
     return this.data[key];
   }
 
@@ -127,4 +177,7 @@ class Config {
   }
 }
 
+// ==============================================
+// EXPORT SINGLETON INSTANCE
+// ==============================================
 module.exports = new Config();
