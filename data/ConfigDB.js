@@ -1,4 +1,3 @@
-// data/ConfigDB.js
 const { DATABASE } = require('../lib/database');
 const { DataTypes } = require('sequelize');
 
@@ -81,7 +80,6 @@ const ConfigDB = DATABASE.define('Config', {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
     },
-    // String values
     AUTO_STATUS_MSG: {
         type: DataTypes.STRING,
         defaultValue: "*SEEN YOUR STATUS BY KHAN-MD 🤍*",
@@ -151,7 +149,7 @@ async function initializeConfig() {
         await ConfigDB.sync();
         await ConfigDB.findOrCreate({
             where: { id: 1 },
-            defaults: {}, // Defaults are already set in the model definition
+            defaults: {},
         });
         isInitialized = true;
     } catch (error) {
@@ -159,53 +157,19 @@ async function initializeConfig() {
     }
 }
 
-async function setConfig(key, value) {
+async function getConfigSafe() {
     try {
         await initializeConfig();
-        const record = await ConfigDB.findByPk(1);
-        
-        // Convert string 'on'/'off' to boolean if needed
-        if (typeof record[key] === 'boolean') {
-            value = value.toString().toLowerCase() === 'on';
-        }
-        
-        record[key] = value;
-        await record.save();
-        return true;
-    } catch (error) {
-        console.error('Error setting config:', error);
-        return false;
-    }
-}
-
-async function getConfig(key) {
-    try {
-        await initializeConfig();
-        const record = await ConfigDB.findByPk(1);
-        return record[key];
+        const config = await ConfigDB.findByPk(1);
+        return config || ConfigDB.build({}, { isNewRecord: false });
     } catch (error) {
         console.error('Error getting config:', error);
-        return null;
-    }
-}
-
-async function getAllConfig() {
-    try {
-        await initializeConfig();
-        const record = await ConfigDB.findByPk(1);
-        return record;
-    } catch (error) {
-        console.error('Error getting all config:', error);
-        return null;
+        return ConfigDB.build({}, { isNewRecord: false });
     }
 }
 
 module.exports = {
     ConfigDB,
     initializeConfig,
-    setConfig,
-    getConfig,
-    getAllConfig,
+    getConfigSafe
 };
-
-// Created BY JawadTechX Don't Remove Credits !
