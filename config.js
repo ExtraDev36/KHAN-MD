@@ -1,9 +1,12 @@
-// config.js
 const fs = require('fs');
-const { getConfigWithFallback } = require('./data/ConfigDB');
+const { getConfigSafe } = require('./data/ConfigDB');
 
 // Load environment variables first
-if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env' });
+if (fs.existsSync('config.env')) {
+    require('dotenv').config({ path: './config.env' });
+} else {
+    console.warn('config.env file not found! Using process.env');
+}
 
 function convertToBool(text, fault = 'true') {
     return text === fault ? true : false;
@@ -11,11 +14,12 @@ function convertToBool(text, fault = 'true') {
 
 async function loadConfig() {
     try {
-        const config = await getConfigWithFallback();
+        const config = await getConfigSafe();
         
         return {
-            // Always from environment
-            SESSION_ID: process.env.SESSION_ID || "",
+            // SECURITY WARNING: Hardcoded session ID is not recommended
+            // This is only for demonstration - use environment variables in production
+            SESSION_ID: process.env.SESSION_ID || "KHAN-MD~Pqx0iR4R#OnrW33yTuVE4pRxVBFyRVxJZI16Tk9CNOghF097aPTw",
             
             // Boolean settings with fallback
             AUTO_STATUS_SEEN: config.AUTO_STATUS_SEEN ?? convertToBool(process.env.AUTO_STATUS_SEEN || "true"),
@@ -60,6 +64,7 @@ async function loadConfig() {
 
 function getEnvDefaults() {
     return {
+        // SECURITY WARNING: Hardcoded session ID is not recommended
         SESSION_ID: process.env.SESSION_ID || "KHAN-MD~Pqx0iR4R#OnrW33yTuVE4pRxVBFyRVxJZI16Tk9CNOghF097aPTw",
         AUTO_STATUS_SEEN: convertToBool(process.env.AUTO_STATUS_SEEN || "true"),
         AUTO_STATUS_REPLY: convertToBool(process.env.AUTO_STATUS_REPLY || "false"),
@@ -95,4 +100,27 @@ function getEnvDefaults() {
     };
 }
 
-module.exports = loadConfig();
+// Initialize config immediately
+let ready = false;
+let configPromise = loadConfig().then(c => {
+    ready = true;
+    if (!c.SESSION_ID) {
+        console.error('WARNING: No SESSION_ID configured!');
+    }
+    return c;
+});
+
+// Export a proxy that handles async loading
+module.exports = new Proxy({}, {
+    get(target, prop) {
+        if (ready) {
+            return configPromise.then(c => c[prop]);
+        }
+        // Fallback to env defaults if not loaded yet
+        const defaults = getEnvDefaults();
+        if (prop in defaults) {
+            return Promise.resolve(defaults[prop]);
+        }
+        return undefined;
+    }
+});
