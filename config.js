@@ -1,88 +1,72 @@
 const fs = require('fs');
-const path = require('path');
-const { getConfigSafe } = require('./data/ConfigDB');
+if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env' });
 
-// ==============================================
-// ENVIRONMENT LOADER (Debugging Enhanced)
-// ==============================================
-const ENV_PATH = path.resolve(__dirname, '.env');
-console.log(`🔍 Looking for .env at: ${ENV_PATH}`);
-
-if (fs.existsSync(ENV_PATH)) {
-  // DEBUG: Show raw file content
-  console.log('📄 .env content:', fs.readFileSync(ENV_PATH, 'utf8'));
-  
-  // Clear Node's env cache
-  Object.keys(process.env).forEach(key => {
-    if (key.startsWith('SESSION_') || key === 'PREFIX') {
-      delete process.env[key];
-    }
-  });
-
-  require('dotenv').config({ path: ENV_PATH, override: true });
-  console.log('✅ Environment loaded - SESSION_ID exists?', !!process.env.SESSION_ID);
-} else {
-  console.error('❌ CRITICAL: No .env file found at:', ENV_PATH);
+function convertToBool(text, fault = 'true') {
+    return text === fault ? true : false;
 }
-
-// ==============================================
-// CONFIGURATION DEFAULTS
-// ==============================================
-const DEFAULTS = {
-  SESSION_ID: "", // MUST come from environment
-  // ... [keep all other defaults unchanged] ...
+module.exports = {
+SESSION_ID: process.env.SESSION_ID || "",
+// add your Session Id 
+AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN || "true",
+// make true or false status auto seen
+AUTO_STATUS_REPLY: process.env.AUTO_STATUS_REPLY || "false",
+// make true if you want auto reply on status 
+AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT || "true",
+// make true if you want auto reply on status 
+AUTO_STATUS_MSG: process.env.AUTO_STATUS_MSG || "*SEEN YOUR STATUS BY KHAN-MD 🤍*",
+// set the auto reply massage on status reply  
+PREFIX: process.env.PREFIX || ".",
+// add your prifix for bot   
+BOT_NAME: process.env.BOT_NAME || "KHAN-MD",
+// add bot namw here for menu
+STICKER_NAME: process.env.STICKER_NAME || "KHAN-MD",
+// type sticker pack name 
+CUSTOM_REACT: process.env.CUSTOM_REACT || "false",
+// make this true for custum emoji react    
+CUSTOM_REACT_EMOJIS: process.env.CUSTOM_REACT_EMOJIS || "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
+// chose custom react emojis by yourself 
+DELETE_LINKS: process.env.DELETE_LINKS || "false",
+// automatic delete links witho remove member 
+OWNER_NUMBER: process.env.OWNER_NUMBER || "92342758XXXX",
+// add your bot owner number
+OWNER_NAME: process.env.OWNER_NAME || "Jᴀᴡᴀᴅ TᴇᴄʜX",
+// add bot owner name
+DESCRIPTION: process.env.DESCRIPTION || "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ Jᴀᴡᴀᴅ TᴇᴄʜX*",
+// add bot owner name    
+ALIVE_IMG: process.env.ALIVE_IMG || "https://files.catbox.moe/149k8x.jpg",
+// add img for alive msg
+LIVE_MSG: process.env.LIVE_MSG || "> Zinda Hun Yar *KHAN-MD*⚡",
+// add alive msg here 
+READ_MESSAGE: process.env.READ_MESSAGE || "false",
+// Turn true or false for automatic read msgs
+AUTO_REACT: process.env.AUTO_REACT || "false",
+// make this true or false for auto react on all msgs
+ANTI_BAD: process.env.ANTI_BAD || "false",
+// false or true for anti bad words  
+MODE: process.env.MODE || "public",
+// make bot public-private-inbox-group 
+ANTI_LINK: process.env.ANTI_LINK || "true",
+// make anti link true,false for groups 
+AUTO_VOICE: process.env.AUTO_VOICE || "false",
+// make true for send automatic voices
+AUTO_STICKER: process.env.AUTO_STICKER || "false",
+// make true for automatic stickers 
+AUTO_REPLY: process.env.AUTO_REPLY || "false",
+// make true or false automatic text reply 
+ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "false",
+// maks true for always online 
+PUBLIC_MODE: process.env.PUBLIC_MODE || "true",
+// make false if want private mod
+AUTO_TYPING: process.env.AUTO_TYPING || "false",
+// true for automatic show typing   
+READ_CMD: process.env.READ_CMD || "false",
+// true if want mark commands as read 
+DEV: process.env.DEV || "923427582273",
+//replace with your whatsapp number        
+ANTI_VV: process.env.ANTI_VV || "true",
+// true for anti once view 
+ANTI_DEL_PATH: process.env.ANTI_DEL_PATH || "log", 
+// change it to 'same' if you want to resend deleted message in same chat 
+AUTO_RECORDING: process.env.AUTO_RECORDING || "false"
+// make it true for auto recoding 
 };
-
-// ==============================================
-// CONFIG MANAGER (Final Working Version)
-// ==============================================
-class Config {
-  constructor() {
-    this.data = { ...DEFAULTS };
-    this.initialize().catch(err => {
-      console.error('⛔ FATAL:', err.message);
-      process.exit(1);
-    });
-  }
-
-  async initialize() {
-    console.log('🔧 Initializing config...');
-    console.log('Process.env.SESSION_ID:', process.env.SESSION_ID ? '*****' : 'MISSING');
-
-    // 1. Load from SQL
-    const dbConfig = await this.loadDatabaseConfig();
-    
-    // 2. Load from Environment
-    const envConfig = this.loadEnvConfig();
-    
-    // 3. Merge configurations
-    this.data = {
-      ...DEFAULTS,
-      ...dbConfig,
-      ...envConfig
-    };
-
-    // 4. Validate
-    this.validate();
-
-    console.log('✅ Config ready. SESSION_ID:', this.data.SESSION_ID ? '*****' : 'MISSING!');
-  }
-
-  loadEnvConfig() {
-    const envConfig = {};
-    const envVars = Object.keys(DEFAULTS)
-      .filter(key => process.env[key] !== undefined);
-
-    console.log('🌐 Found env vars:', envVars);
-
-    envVars.forEach(key => {
-      envConfig[key] = this.parseValue(process.env[key], DEFAULTS[key]);
-    });
-
-    return envConfig;
-  }
-
-  // ... [keep other methods unchanged] ...
-}
-
-module.exports = new Config();
