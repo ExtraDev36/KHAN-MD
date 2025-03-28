@@ -1,7 +1,7 @@
 const { DATABASE } = require('../lib/database');
 const { DataTypes } = require('sequelize');
 
-const BotConfigDB = DATABASE.define('BotConfigs', {
+const BotConfigDB = DATABASE.define('BotConfigs', {  // Fixed the table name to match Sequelize's convention
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -17,7 +17,7 @@ const BotConfigDB = DATABASE.define('BotConfigs', {
         allowNull: false,
     },
 }, {
-    tableName: 'bot_configs',
+    tableName: 'BotConfigs',  // Ensured the correct table name
     timestamps: false,
 });
 
