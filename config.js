@@ -3,28 +3,29 @@ const path = require('path');
 const { getConfigSafe } = require('./data/ConfigDB');
 
 // ==============================================
-// ENVIRONMENT LOADER (Foolproof)
+// ENVIRONMENT LOADER (Fixed ReferenceError)
 // ==============================================
-const ENV_PATH = path.resolve(__dirname, '.env');
-if (fs.existsSync(ENV_PATH)) {
-  // Clear Node's environment cache
-  Object.keys(process.env)
-    .filter(key => key.startsWith('SESSION_') || Object.keys(DEFAULTS).includes(key))
-    .forEach(key => delete process.env[key]);
+const loadEnvironment = () => {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    require('dotenv').config({ path: envPath });
+    console.log(`✅ Environment loaded from: ${envPath}`);
+    return true;
+  }
+  console.warn('⚠️ No .env file found at:', envPath);
+  return false;
+};
 
-  require('dotenv').config({ path: ENV_PATH, override: true });
-  console.log(`✅ Environment loaded from: ${ENV_PATH}`);
-} else {
-  console.warn(`⚠️ No .env file found at: ${ENV_PATH}`);
-}
+// Initialize environment first
+loadEnvironment();
 
 // ==============================================
-// COMPLETE DEFAULTS (All Variables)
+// COMPLETE CONFIGURATION DEFAULTS
 // ==============================================
 const DEFAULTS = {
-  // REQUIRED (must come from environment)
-  SESSION_ID: "",
-
+  // REQUIRED
+  SESSION_ID: "", // Must come from environment
+  
   // CORE SETTINGS
   PREFIX: ".",
   BOT_NAME: "KHAN-MD",
@@ -32,17 +33,18 @@ const DEFAULTS = {
   MODE: "public",
   DEV: "923427582273",
   ANTI_DEL_PATH: "log",
-
-  // FEATURE TOGGLES (Booleans)
+  
+  // FEATURE TOGGLES
   AUTO_STATUS_SEEN: true,
   AUTO_STATUS_REACT: true,
   AUTO_STATUS_REPLY: false,
-  CUSTOM_REACT: false,
-  DELETE_LINKS: false,
   READ_MESSAGE: false,
   AUTO_REACT: false,
   ANTI_BAD: false,
   ANTI_LINK: true,
+  ANTI_VV: true,
+  CUSTOM_REACT: false,
+  DELETE_LINKS: false,
   AUTO_VOICE: false,
   AUTO_STICKER: false,
   AUTO_REPLY: false,
@@ -50,10 +52,9 @@ const DEFAULTS = {
   PUBLIC_MODE: true,
   AUTO_TYPING: false,
   READ_CMD: false,
-  ANTI_VV: true,
   AUTO_RECORDING: false,
 
-  // CONTENT (Strings/Arrays)
+  // CONTENT
   OWNER_NUMBER: "92342758XXXX",
   OWNER_NAME: "Jᴀᴡᴀᴅ TᴇᴄʜX",
   DESCRIPTION: "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ Jᴀᴡᴀᴅ TᴇᴄʜX*",
@@ -64,50 +65,53 @@ const DEFAULTS = {
 };
 
 // ==============================================
-// CONFIG MANAGER (Final Version)
+// CONFIGURATION MANAGER (Fixed)
 // ==============================================
 class Config {
   constructor() {
     this.data = { ...DEFAULTS };
     this.initialize().catch(err => {
-      console.error('⛔ FATAL CONFIG ERROR:', err.message);
+      console.error('⛔ Config Error:', err.message);
       process.exit(1);
     });
   }
 
   async initialize() {
     try {
-      // 1. Load from all sources
-      const [dbConfig, envConfig] = await Promise.all([
-        this.loadDatabaseConfig(),
-        this.loadEnvConfig()
-      ]);
-
-      // 2. Merge with priority: ENV > DB > DEFAULTS
+      // 1. Load from SQL Database
+      const dbConfig = await this.loadDatabaseConfig();
+      
+      // 2. Load environment variables
+      const envConfig = this.loadEnvConfig();
+      
+      // 3. Merge (ENV > DB > DEFAULTS)
       this.data = {
         ...DEFAULTS,
         ...dbConfig,
         ...envConfig
       };
 
-      // 3. Final validation
+      // 4. Validate
       this.validate();
 
-      console.log('✅ Config fully loaded');
-      this.logConfigSummary();
+      console.log('✅ Config loaded successfully');
+      console.log('🔧 Active Mode:', this.data.MODE);
+      console.log('⚙️ Features:', {
+        ANTI_LINK: this.data.ANTI_LINK,
+        AUTO_REACT: this.data.AUTO_REACT
+      });
 
     } catch (error) {
-      throw new Error(`Config failed: ${error.message}`);
+      throw new Error(`Initialization failed: ${error.message}`);
     }
   }
 
   async loadDatabaseConfig() {
     try {
-      const dbConfig = await getConfigSafe() || {};
-      console.log(`💾 Loaded ${Object.keys(dbConfig).length} DB settings`);
-      return dbConfig;
+      const config = await getConfigSafe();
+      return config || {};
     } catch (error) {
-      console.error('⚠️ DB Config Error:', error.message);
+      console.error('⚠️ DB Error:', error.message);
       return {};
     }
   }
@@ -115,52 +119,37 @@ class Config {
   loadEnvConfig() {
     const envConfig = {};
     
-    // Process ALL possible environment variables
+    // Process all possible environment variables
     for (const [key, defaultValue] of Object.entries(DEFAULTS)) {
       if (process.env[key] !== undefined) {
-        envConfig[key] = this.parseEnvValue(process.env[key], defaultValue);
+        envConfig[key] = this.parseValue(process.env[key], defaultValue);
       }
     }
-
-    console.log(`🌐 Loaded ${Object.keys(envConfig).length} env variables`);
+    
     return envConfig;
   }
 
-  parseEnvValue(value, defaultValue) {
-    // Handle booleans
+  parseValue(value, defaultValue) {
+    // Handle boolean values
     if (typeof defaultValue === 'boolean') {
       return value.toLowerCase() === 'true';
     }
-    // Handle arrays (like emojis)
+    // Handle arrays
     if (Array.isArray(defaultValue)) {
       return value.split(',').map(item => item.trim());
     }
-    // All other values as strings
+    // Everything else as string
     return String(value);
   }
 
   validate() {
-    const errors = [];
-    
     if (!this.data.SESSION_ID) {
-      errors.push('SESSION_ID is REQUIRED in .env file');
+      throw new Error(`
+        SESSION_ID is required!
+        Add to .env file:
+        SESSION_ID="your_session_key_here"
+      `);
     }
-
-    if (errors.length > 0) {
-      throw new Error(`Configuration invalid:\n${errors.join('\n')}`);
-    }
-  }
-
-  logConfigSummary() {
-    console.log('🔧 Active Configuration:');
-    console.log('- Mode:', this.data.MODE);
-    console.log('- Prefix:', this.data.PREFIX);
-    console.log('- Owner:', this.data.OWNER_NAME);
-    console.log('- Features:', {
-      ANTI_LINK: this.data.ANTI_LINK,
-      AUTO_REACT: this.data.AUTO_REACT,
-      ANTI_VV: this.data.ANTI_VV
-    });
   }
 
   get(key) {
@@ -177,6 +166,6 @@ class Config {
 }
 
 // ==============================================
-// SINGLETON EXPORT
+// EXPORT INITIALIZED CONFIG
 // ==============================================
 module.exports = new Config();
