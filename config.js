@@ -1,4 +1,3 @@
-oadConfig();
 // config.js
 const fs = require('fs');
 const { getConfigWithFallback } = require('./data/ConfigDB');
