@@ -27,14 +27,14 @@ async (conn, mek, m, { from, sender, isGroup, reply, quoted }) => {
             targetJid = mek.message.extendedTextMessage.contextInfo.mentionedJid[0];
             identifier = "User";
         } 
-        // Check if in a group and no mention/reply
+        // Check if in a group without mention/reply
         else if (isGroup) {
             targetJid = from;
             identifier = "Group";
         } 
-        // Fallback to sender
+        // Inbox chat or fallback
         else {
-            targetJid = sender;
+            targetJid = from;
             identifier = "User";
         }
 
