@@ -1,6 +1,6 @@
 const { cmd } = require('../command');
 const yts = require('yt-search');
-const { ytdlv2, ytdlv1 } = require('@vioo/apis');
+const { yt, ytv } = require('@vioo/apis'); // Corrected imports
 
 cmd({
     pattern: "playx",
@@ -22,81 +22,63 @@ async (conn, mek, m, { from, reply, args, prefix, command }) => {
             // Show searching message
             waitMsg = await reply(`🔍 Searching for "${query}"...`);
             
-            // Search YouTube using yt-search
+            // Search YouTube
             const search = await yts(query);
             const videos = search.videos;
             
-            if (!videos || videos.length === 0) {
-                if (waitMsg) await conn.sendMessage(from, { delete: waitMsg.key });
-                return reply('❌ No results found for your search.');
+            if (!videos || !videos.length) {
+                return reply('❌ No results found.');
             }
 
             const video = videos[0];
             if (!video.url) {
-                if (waitMsg) await conn.sendMessage(from, { delete: waitMsg.key });
-                return reply('❌ Could not get video URL from search results.');
+                return reply('❌ Invalid video URL.');
             }
 
-            // Update message to downloading status
-            if (waitMsg) {
-                await conn.sendMessage(from, { 
-                    text: `⬇️ Downloading: ${video.title}\n\n⏳ Please wait...`, 
-                    edit: waitMsg.key 
-                });
-            }
+            // Update to downloading status
+            await conn.sendMessage(from, { 
+                text: `⬇️ Downloading: ${video.title}\n\n⏳ Please wait...`, 
+                edit: waitMsg.key 
+            });
 
             // Download audio using @vioo/apis
-            const result = await ytdlv2(video.url, { 
-                quality: 'highestaudio',
-                filter: 'audioonly',
+            const result = await yt(video.url, {
+                quality: '360p',
                 format: 'mp3'
             }).catch(async (e) => {
-                console.error('YTDLv2 Error:', e);
-                return await ytdlv1(video.url, {
-                    quality: 'highestaudio',
-                    filter: 'audioonly',
+                console.error('YT Error:', e);
+                return await ytv(video.url, {
+                    quality: '360p',
                     format: 'mp3'
                 });
             });
 
-            if (!result || !result.url) {
-                if (waitMsg) await conn.sendMessage(from, { delete: waitMsg.key });
-                return reply('❌ Failed to download audio. The video might be too long or restricted.');
-            }
+            if (!result) return reply('❌ Download failed.');
 
-            // Send audio with metadata
+            // Send audio
             await conn.sendMessage(from, {
-                audio: { url: result.url },
+                audio: result, // Directly use the buffer
                 mimetype: 'audio/mpeg',
                 contextInfo: {
                     externalAdReply: {
-                        title: video.title || 'YouTube Audio',
-                        body: video.author?.name || 'Unknown Artist',
-                        thumbnailUrl: video.thumbnail || '',
+                        title: video.title.substring(0, 55) || 'YouTube Audio',
+                        body: video.author?.name.substring(0, 40) || 'Unknown Artist',
+                        thumbnailUrl: video.thumbnail,
                         mediaType: 1,
                         mediaUrl: video.url,
-                        sourceUrl: video.url,
-                        showAdAttribution: true
+                        sourceUrl: video.url
                     }
                 }
             }, { quoted: mek });
 
-        } catch (e) {
-            console.error('Error in play command:', e);
-            throw e;
         } finally {
-            // Delete wait message if it exists
             if (waitMsg?.key) {
-                try {
-                    await conn.sendMessage(from, { delete: waitMsg.key });
-                } catch (deleteError) {
-                    console.error('Failed to delete wait message:', deleteError);
-                }
+                await conn.sendMessage(from, { delete: waitMsg.key });
             }
         }
 
     } catch (e) {
-        console.error('Play Command Error:', e);
-        reply(`❌ Error: ${e.message || 'Failed to process your request'}`);
+        console.error('Play Error:', e);
+        reply(`❌ Error: ${e.message || 'Processing failed'}`);
     }
 });
