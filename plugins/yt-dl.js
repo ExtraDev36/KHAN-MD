@@ -3,7 +3,7 @@ const axios = require('axios');
 const { youtubeSearch, ytdlv2, ytdlv1 } = require('@vioo/apis');
 
 cmd({
-    pattern: "play",
+    pattern: "playx",
     react: "🎵",
     alias: ["song", "music"],
     desc: "Search and play music from YouTube",
