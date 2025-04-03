@@ -1,6 +1,6 @@
 const { cmd } = require('../command');
-const axios = require('axios');
-const { youtubeSearch, ytdlv2, ytdlv1 } = require('@vioo/apis');
+const yts = require('yt-search'); // Using yt-search for searching
+const { ytdlv2, ytdlv1 } = require('@vioo/apis');
 
 cmd({
     pattern: "playx",
@@ -20,15 +20,15 @@ async (conn, mek, m, { from, reply, args, prefix, command }) => {
         // Show searching message
         const waitMsg = await reply(`🔍 Searching for "${query}"...`);
 
-        // Search YouTube
-        const searchResults = await youtubeSearch(query, { limit: 1 });
+        // Search YouTube using yt-search
+        const { videos } = await yts(query);
         
-        if (!searchResults || searchResults.length === 0) {
+        if (!videos || videos.length === 0) {
             await conn.sendMessage(from, { delete: waitMsg.key });
             return reply('❌ No results found for your search.');
         }
 
-        const video = searchResults[0];
+        const video = videos[0];
         if (!video.url) {
             await conn.sendMessage(from, { delete: waitMsg.key });
             return reply('❌ Could not get video URL from search results.');
@@ -40,7 +40,7 @@ async (conn, mek, m, { from, reply, args, prefix, command }) => {
             edit: waitMsg.key 
         });
 
-        // Download audio
+        // Download audio using @vioo/apis
         const result = await ytdlv2(video.url, { 
             quality: 'highestaudio',
             filter: 'audioonly',
@@ -66,7 +66,7 @@ async (conn, mek, m, { from, reply, args, prefix, command }) => {
             contextInfo: {
                 externalAdReply: {
                     title: video.title || 'YouTube Audio',
-                    body: video.channel || 'Unknown Artist',
+                    body: video.author.name || 'Unknown Artist',
                     thumbnailUrl: video.thumbnail || '',
                     mediaType: 1,
                     mediaUrl: video.url,
