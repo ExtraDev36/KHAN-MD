@@ -16,17 +16,25 @@ async (conn, mek, m, { from, sender, isGroup, reply, quoted }) => {
         // Determine target JID
         let targetJid;
         let identifier;
-        
-        // Check if in group and no mention/reply
-        if (isGroup && !quoted && !mek.message?.extendedTextMessage?.contextInfo?.mentionedJid) {
+
+        // Check if a reply is made
+        if (quoted) {
+            targetJid = quoted.sender;
+            identifier = "User";
+        } 
+        // Check if a mention is made
+        else if (mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+            targetJid = mek.message.extendedTextMessage.contextInfo.mentionedJid[0];
+            identifier = "User";
+        } 
+        // Check if in a group and no mention/reply
+        else if (isGroup) {
             targetJid = from;
             identifier = "Group";
         } 
-        // Check for mentions/replies
+        // Fallback to sender
         else {
-            targetJid = quoted?.sender || 
-                      mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
-                      sender;
+            targetJid = sender;
             identifier = "User";
         }
 
@@ -59,7 +67,7 @@ async (conn, mek, m, { from, sender, isGroup, reply, quoted }) => {
         await conn.sendMessage(from, {
             image: { url: ppUrl },
             caption: caption,
-            mentions: identifier === "User" ? [targetJid] : []
+            mentions: [targetJid]
         }, { quoted: mek });
 
     } catch (e) {
