@@ -1,61 +1,69 @@
-const { cmd } = require("../command");
+const config = require('../config')
+const { cmd, commands } = require('../command')
+const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson} = require('../lib/functions')
 
-cmd(
-    {
-        pattern: "getpp",
-        desc: "Get profile picture of user",
-        category: "utility",
-        react: "🖼️",
-        filename: __filename,
-        use: "[@tag/reply]",
-    },
-    async (conn, mek, m, { reply, isGroup, sender }) => {
-        try {
-            // 1. Determine target user (fixed reply/mention handling)
-            let targetUser = sender; // Default to sender
-            
-            // Check for quoted/replied message first
-            if (mek.message?.extendedTextMessage?.contextInfo?.participant) {
-                targetUser = mek.message.extendedTextMessage.contextInfo.participant;
-            }
-            // Check for mentions
-            else if (mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
-                targetUser = mek.message.extendedTextMessage.contextInfo.mentionedJid[0];
-            }
-
-            // 2. Get profile picture with proper fallback
-            let ppUrl;
-            try {
-                ppUrl = await conn.profilePictureUrl(targetUser, 'image');
-            } catch {
-                ppUrl = 'https://i.ibb.co/KhYC4FY/1221bc0bdd2354b42b293317ff2adbcf-icon.png';
-            }
-
-            // 3. Create smart caption
-            let username = targetUser.split('@')[0];
-            try {
-                const contact = await conn.contactDB?.get(targetUser);
-                if (contact?.name) username = contact.name;
-            } catch {}
-            
-            let caption = isGroup 
-                ? `🖼️ Profile picture of @${username}`
-                : "🖼️ Here's the profile picture";
-
-            // 4. Send the image
-            await conn.sendMessage(
-                m.chat,
-                { 
-                    image: { url: ppUrl },
-                    caption: caption,
-                    mentions: isGroup ? [targetUser] : []
-                },
-                { quoted: mek }
-            );
-
-        } catch (error) {
-            console.error("getpp error:", error);
-            reply(`❌ Error: ${error.message || "Failed to fetch profile picture"}`);
+cmd({
+    pattern: "getpp",
+    react: "🖼️",
+    alias: ["profilepic", "getdp"],
+    desc: "Get profile picture of user/group",
+    category: "utility",
+    use: '.getpp [@tag/reply] (or use in group for group DP)',
+    filename: __filename
+},
+async (conn, mek, m, { from, sender, isGroup, reply, quoted }) => {
+    try {
+        // Determine target JID
+        let targetJid;
+        let identifier;
+        
+        // Check if in group and no mention/reply
+        if (isGroup && !quoted && !mek.message?.extendedTextMessage?.contextInfo?.mentionedJid) {
+            targetJid = from;
+            identifier = "Group";
+        } 
+        // Check for mentions/replies
+        else {
+            targetJid = quoted?.sender || 
+                      mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
+                      sender;
+            identifier = "User";
         }
+
+        // Get profile picture with fallback
+        let ppUrl;
+        try {
+            ppUrl = await conn.profilePictureUrl(targetJid, 'image');
+        } catch {
+            ppUrl = 'https://i.ibb.co/KhYC4FY/1221bc0bdd2354b42b293317ff2adbcf-icon.png';
+        }
+
+        // Get name/identifier
+        let name;
+        if (identifier === "Group") {
+            const groupInfo = await conn.groupMetadata(targetJid);
+            name = groupInfo.subject || "Unknown Group";
+        } else {
+            try {
+                const contact = await conn.contactDB?.get(targetJid);
+                name = contact?.name || targetJid.split('@')[0];
+            } catch {
+                name = targetJid.split('@')[0];
+            }
+        }
+
+        // Format caption
+        const caption = `*${identifier} Profile Picture*\n\n▢ Name: ${name}\n▢ JID: ${targetJid.replace(/@.+/, '')}`;
+
+        // Send image with info
+        await conn.sendMessage(from, {
+            image: { url: ppUrl },
+            caption: caption,
+            mentions: identifier === "User" ? [targetJid] : []
+        }, { quoted: mek });
+
+    } catch (e) {
+        console.error("GetPP error:", e);
+        reply(`❌ Failed to fetch profile picture: ${e.message}`);
     }
-); 
+});
