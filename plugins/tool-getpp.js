@@ -1,5 +1,4 @@
 const { cmd } = require("../command");
-const axios = require("axios");
 
 cmd(
     {
@@ -8,16 +7,23 @@ cmd(
         category: "utility",
         react: "🖼️",
         filename: __filename,
-        use: "@tag or reply (optional)",
+        use: "[@tag/reply]",
     },
-    async (conn, mek, m, { reply, quoted, isGroup, sender }) => {
+    async (conn, mek, m, { reply, isGroup, sender }) => {
         try {
-            // Determine target user (reply > mention > sender)
-            let targetUser = quoted?.sender || 
-                          m.mentionedJid?.[0] || 
-                          sender;
+            // 1. Determine target user (fixed reply/mention handling)
+            let targetUser = sender; // Default to sender
+            
+            // Check for quoted/replied message first
+            if (mek.message?.extendedTextMessage?.contextInfo?.participant) {
+                targetUser = mek.message.extendedTextMessage.contextInfo.participant;
+            }
+            // Check for mentions
+            else if (mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
+                targetUser = mek.message.extendedTextMessage.contextInfo.mentionedJid[0];
+            }
 
-            // Get profile picture with same fallback as .person command
+            // 2. Get profile picture with proper fallback
             let ppUrl;
             try {
                 ppUrl = await conn.profilePictureUrl(targetUser, 'image');
@@ -25,32 +31,31 @@ cmd(
                 ppUrl = 'https://i.ibb.co/KhYC4FY/1221bc0bdd2354b42b293317ff2adbcf-icon.png';
             }
 
-            // Create caption with mention handling
-            let caption;
-            if (isGroup) {
-                if (targetUser !== sender) {
-                    caption = `🖼️ Profile picture of @${targetUser.split('@')[0]}`;
-                } else {
-                    caption = `🖼️ ${m.pushName || 'Your'} profile picture`;
-                }
-            } else {
-                caption = "🖼️ Here's your profile picture";
-            }
+            // 3. Create smart caption
+            let username = targetUser.split('@')[0];
+            try {
+                const contact = await conn.contactDB?.get(targetUser);
+                if (contact?.name) username = contact.name;
+            } catch {}
+            
+            let caption = isGroup 
+                ? `🖼️ Profile picture of @${username}`
+                : "🖼️ Here's the profile picture";
 
-            // Send the image (using URL directly like .person command)
+            // 4. Send the image
             await conn.sendMessage(
-                mek.chat,
+                m.chat,
                 { 
                     image: { url: ppUrl },
                     caption: caption,
-                    mentions: targetUser !== sender ? [targetUser] : []
+                    mentions: isGroup ? [targetUser] : []
                 },
                 { quoted: mek }
             );
 
         } catch (error) {
-            console.error("❌ Error in .getpp command:", error);
-            reply(`❌ Failed to get profile picture: ${error.message}`);
+            console.error("getpp error:", error);
+            reply(`❌ Error: ${error.message || "Failed to fetch profile picture"}`);
         }
     }
-);
+); 
