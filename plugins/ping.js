@@ -9,7 +9,7 @@ cmd({
     react: "⚡",
     filename: __filename
 },
-async (conn, mek, m, { from, quoted, sender, reply }) => {
+async (conn, mek, m, { from, quoted, sender, reply, isChannel }) => {
     try {
         const start = new Date().getTime();
 
