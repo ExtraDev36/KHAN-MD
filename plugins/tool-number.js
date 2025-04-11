@@ -4,49 +4,64 @@ const axios = require("axios");
 cmd({
     pattern: "tempnum",
     alias: ["fakenum", "tempnumber"],
-    desc: "Generate temporary numbers for any country",
+    desc: "Get temporary numbers & OTP instructions",
     category: "tools",
     react: "📱",
-    use: ".tempnum us"
+    use: "<country-code>"
 },
-async (Void, m, { args, reply }) => {
+async (conn, mek, m, { from, args, reply }) => {
     try {
-        const countryCode = args[0]?.toLowerCase() || "us"; // Default to US if no code provided
-        
-        // Fetch data with error handling
-        const response = await axios.get(
-            `https://api.vreden.my.id/api/tools/fakenumber/listnumber?id=${countryCode}`,
-            { timeout: 5000 }
-        );
-
-        const data = response.data;
-
-        // Check if response contains valid data
-        if (!data || !Array.isArray(data.result) || data.result.length === 0) {
-            return reply(`❌ No numbers found for *${countryCode.toUpperCase()}*.\nTry another country code!`);
+        // Mandatory country code check
+        if (!args || args.length < 1) {
+            return reply(`❌ *Usage:* .tempnum <country-code>\nExample: .tempnum us\n\n📦 Use *.otpinbox <number>* to check OTPs`);
         }
 
-        // Extract numbers safely
-        const numbers = data.result.slice(0, 15); // Limit to 15 numbers max
-        const country = numbers[0]?.country || countryCode.toUpperCase();
+        const countryCode = args[0].toLowerCase();
+        
+        // API call with validation
+        const { data } = await axios.get(
+            `https://api.vreden.my.id/api/tools/fakenumber/listnumber?id=${countryCode}`,
+            { 
+                timeout: 10000,
+                validateStatus: status => status === 200
+            }
+        );
 
-        // Format the output
-        let numberList = numbers.map((num, i) => `${i + 1}. ${num.number}`).join("\n");
+        // Strict response validation
+        if (!data?.result || !Array.isArray(data.result) {
+            console.error("Invalid API structure:", data);
+            return reply(`⚠ Invalid API response format\nTry ${prefix}tempnum us`);
+        }
 
+        if (data.result.length === 0) {
+            return reply(`📭 No numbers available for *${countryCode.toUpperCase()}*\nTry another country code!\n\nUse ${prefix}otpinbox <number> after selection`);
+        }
+
+        // Process numbers
+        const numbers = data.result.slice(0, 25);
+        const numberList = numbers.map((num, i) => 
+            `${String(i+1).padStart(2, ' ')}. ${num.number}`
+        ).join("\n");
+
+        // Final message with OTP instructions
         await reply(
-            `╭──「 📱 *TEMP NUMBERS* 」\n` +
+            `╭──「 📱 TEMPORARY NUMBERS 」\n` +
             `│\n` +
-            `│ 🌍 *Country:* ${country}\n` +
-            `│ 🔢 *Available Numbers:*\n` +
-            `${numberList}\n` +
+            `│ Country: ${countryCode.toUpperCase()}\n` +
+            `│ Numbers Found: ${numbers.length}\n` +
             `│\n` +
-            `│ 💡 *Usage:* .otpbox <number>\n` +
-            `╰──「 Powered by *KHAN-MD* 」`
+            `${numberList}\n\n` +
+            `╰──「 📦 USE: .otpinbox <number> 」\n` +
+            `_Example: .otpinbox +1234567890_`
         );
 
     } catch (err) {
         console.error("API Error:", err);
-        reply("⚠ API is currently down or not responding. Try again later!");
+        const errorMessage = err.code === "ECONNABORTED" ? 
+            `⏳ *Timeout*: API took too long\nTry smaller country codes like 'us', 'gb'` :
+            `⚠ *Error*: ${err.message}\nUse format: ${prefix}tempnum <country-code>`;
+            
+        reply(`${errorMessage}\n\n🔑 Remember: ${prefix}otpinbox <number>`);
     }
 });
 
