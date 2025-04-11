@@ -9,11 +9,11 @@ cmd({
     react: "📱",
     use: "<country-code>"
 },
-async (conn, mek, m, { from, args, reply }) => {
+async (conn, mek, m, { from, args, reply, prefix }) => {
     try {
         // Mandatory country code check
         if (!args || args.length < 1) {
-            return reply(`❌ *Usage:* .tempnum <country-code>\nExample: .tempnum us\n\n📦 Use *.otpinbox <number>* to check OTPs`);
+            return reply(`❌ *Usage:* .tempnum <country-code>\nExample: .tempnum us\n\n📦 Use .otpinbox <number>* to check OTPs`);
         }
 
         const countryCode = args[0].toLowerCase();
@@ -27,14 +27,14 @@ async (conn, mek, m, { from, args, reply }) => {
             }
         );
 
-        // Strict response validation
-        if (!data?.result || !Array.isArray(data.result) {
+        // Fixed syntax error here - added missing parenthesis
+        if (!data?.result || !Array.isArray(data.result)) {
             console.error("Invalid API structure:", data);
-            return reply(`⚠ Invalid API response format\nTry ${prefix}tempnum us`);
+            return reply(`⚠ Invalid API response format\nTry .tempnum us`);
         }
 
         if (data.result.length === 0) {
-            return reply(`📭 No numbers available for *${countryCode.toUpperCase()}*\nTry another country code!\n\nUse ${prefix}otpinbox <number> after selection`);
+            return reply(`📭 No numbers available for *${countryCode.toUpperCase()}*\nTry another country code!\n\nUse .otpinbox <number> after selection`);
         }
 
         // Process numbers
@@ -59,7 +59,7 @@ async (conn, mek, m, { from, args, reply }) => {
         console.error("API Error:", err);
         const errorMessage = err.code === "ECONNABORTED" ? 
             `⏳ *Timeout*: API took too long\nTry smaller country codes like 'us', 'gb'` :
-            `⚠ *Error*: ${err.message}\nUse format: ${prefix}tempnum <country-code>`;
+            `⚠ *Error*: ${err.message}\nUse format: .tempnum <country-code>`;
             
         reply(`${errorMessage}\n\n🔑 Remember: ${prefix}otpinbox <number>`);
     }
